@@ -1,5 +1,7 @@
 #include "capturethread.h"
 #include "mainwindow.h"
+#include "savethread.h"
+#include "memorypool.h"
 #include <QDebug>
 
 #include <windows.h>
@@ -28,7 +30,7 @@ extern QString              g_captureROI_path;
 extern bool                 g_captureROI_flag; //是否采集并保存ROI图像
 
 CaptureThread::CaptureThread(QObject* parent) :
-    QThread(parent)
+    QThread(parent), m_saveThread(nullptr), m_memoryPool(nullptr)
 {
     pause_status = true;
     quit = false;
@@ -66,11 +68,16 @@ void CaptureThread::run()
                         img.setColorTable(grayColourTable);
                         emit captured(img, i);     //发射信号，通知主线程更新显示
                         g_timestamp_disply_front[i] = g_timestamp[i]; // 更新显示时间戳
-                    }
-
+                    }                    
                     if (g_captureROI_flag) //如果需要采集ROI图像
                     {
-                        captureROI(i);
+                        // 使用新的异步保存方法
+                        if (m_saveThread && m_memoryPool) {
+                            captureROIAsync(i);
+                        } else {
+                            // 回退到原来的同步方法
+                            captureROI(i);
+                        }
                     }
 
                     g_read_fps[i]++; //统计抓取帧率
@@ -99,6 +106,15 @@ void CaptureThread::stop()
     quit = true;
 }
 
+void CaptureThread::setSaveThread(SaveThread* saveThread)
+{
+    m_saveThread = saveThread;
+}
+
+void CaptureThread::setMemoryPool(MemoryPool* memoryPool)
+{
+    m_memoryPool = memoryPool;
+}
 
 void CaptureThread::captureROI(int cameraIndex)
 {
@@ -135,4 +151,60 @@ void CaptureThread::captureROI(int cameraIndex)
     imgROI.save(QString::fromLatin1(filename) + ".bmp", "BMP");
 
     free(pbImgBuffer);
+}
+
+void CaptureThread::captureROIAsync(int cameraIndex)
+{
+    if (cameraIndex < 0 || cameraIndex >= g_cameraCount) return;
+    if (!m_saveThread || !m_memoryPool) return;
+    
+    // 从内存池获取缓冲区
+    QByteArray* buffer = m_memoryPool->acquireBlock();
+    if (!buffer) {
+        qWarning() << "Failed to acquire memory block for camera" << cameraIndex;
+        return;
+    }
+    
+    int width = g_W_H_INFO[cameraIndex].sensor_width;
+    int height = g_W_H_INFO[cameraIndex].sensor_height;
+    int ROI_w = 512; // ROI宽度
+    int ROI_h = 512; // ROI高度
+    int ROI_x = (width - ROI_w) / 2; // ROI左上角x坐标
+    int ROI_y = (height - ROI_h) / 2; // ROI左上角y坐标
+    
+    // 确保缓冲区大小足够
+    if (buffer->size() < ROI_w * ROI_h) {
+        buffer->resize(ROI_w * ROI_h);
+    }
+    
+    // 直接从原始缓冲区提取ROI数据，减少内存拷贝
+    BYTE* roiData = reinterpret_cast<BYTE*>(buffer->data());
+    BYTE* sourceData = g_pMono8Buffer[cameraIndex];
+    
+    if (!sourceData) {
+        m_memoryPool->releaseBlock(buffer);
+        return;
+    }
+    
+    // 高效的ROI提取：逐行拷贝
+    for (int r = 0; r < ROI_h; r++) {
+        memcpy(&roiData[r * ROI_w], 
+               &sourceData[(ROI_y + r) * width + ROI_x], 
+               ROI_w);
+    }
+    
+    // 创建保存任务
+    SaveTask task;
+    task.imageData = *buffer; // 这里会进行一次拷贝，但在异步线程中处理
+    task.width = ROI_w;
+    task.height = ROI_h;
+    task.cameraIndex = cameraIndex;
+    task.timestamp = g_timestamp[cameraIndex];
+    task.basePath = g_captureROI_path;
+    
+    // 将任务加入保存队列
+    m_saveThread->addSaveTask(task);
+    
+    // 立即释放内存块供下次使用
+    m_memoryPool->releaseBlock(buffer);
 }

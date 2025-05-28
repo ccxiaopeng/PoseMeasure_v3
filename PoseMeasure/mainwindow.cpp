@@ -65,10 +65,18 @@ MainWindow::MainWindow(QWidget* parent) :
     //设置定时器，每秒刷新一次相机状态栏
     m_timer = new QTimer(this);
     connect(m_timer, SIGNAL(timeout()), this, SLOT(camera_statues()));
-    m_timer->start(1000);
+    m_timer->start(1000);    // 初始化内存池 (ROI图像大小 512x512 = 262144 字节，池大小100)
+    m_memoryPool = new MemoryPool(512 * 512, 100);
+    
+    // 初始化异步保存线程
+    m_saveThread = new SaveThread(this);
+    m_saveThread->start();
 
     //建立图像获取线程
     m_thread = new CaptureThread(this);
+    // 传递保存线程和内存池给采集线程
+    m_thread->setSaveThread(m_saveThread);
+    m_thread->setMemoryPool(m_memoryPool);
     connect(m_thread, SIGNAL(captured(QImage, int)),
         this, SLOT(Image_process(QImage, int)), Qt::BlockingQueuedConnection);
 
@@ -91,6 +99,20 @@ MainWindow::MainWindow(QWidget* parent) :
 
 MainWindow::~MainWindow()
 {
+    // 停止保存线程
+    if (m_saveThread) {
+        m_saveThread->stop();
+        m_saveThread->wait();
+        delete m_saveThread;
+        m_saveThread = nullptr;
+    }
+    
+    // 清理内存池
+    if (m_memoryPool) {
+        delete m_memoryPool;
+        m_memoryPool = nullptr;
+    }
+    
     delete ui;
 }
 
@@ -145,12 +167,20 @@ void MainWindow::closeEvent(QCloseEvent* e)
 
 void MainWindow::camera_statues()
 {
-    // 显示两个相机的帧率信息
-    QString statusText = QString("Camera1 - Capture:%1 Display:%2 | Camera2 - Capture:%3 Display:%4")
+    // 获取保存队列和内存池状态
+    int queueSize = m_saveThread ? m_saveThread->getQueueSize() : 0;
+    int totalSaved = m_saveThread ? m_saveThread->getTotalSaved() : 0;
+    int availableMemory = m_memoryPool ? m_memoryPool->getAvailableCount() : 0;
+    
+    // 显示两个相机的帧率信息以及保存状态
+    QString statusText = QString("Cam1: C:%1 D:%2 | Cam2: C:%3 D:%4 | Queue:%5 Saved:%6 Mem:%7")
         .arg(QString::number(g_read_fps[0], 'f', 2))
         .arg(QString::number(g_disply_fps[0], 'f', 2))
         .arg(QString::number(g_read_fps[1], 'f', 2))
-        .arg(QString::number(g_disply_fps[1], 'f', 2));
+        .arg(QString::number(g_disply_fps[1], 'f', 2))
+        .arg(queueSize)
+        .arg(totalSaved)
+        .arg(availableMemory);
     
     m_camera_statuesFps->setText(statusText);
     

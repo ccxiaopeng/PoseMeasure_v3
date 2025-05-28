@@ -5,6 +5,8 @@
 #include <QtGui>
 #include <QMessageBox>
 #include "capturethread.h"
+#include "savethread.h"
+#include "memorypool.h"
 #include "ui_mainwindow.h"
 
 
@@ -73,6 +75,10 @@ private:
     QRadioButton* radioButton_speed[3];
 
     CaptureThread* m_thread;
+    
+    // 异步保存系统
+    SaveThread* m_saveThread;
+    MemoryPool* m_memoryPool;
 
     int m_currentCamera; // 当前选中的相机索引 (0或1)
 };

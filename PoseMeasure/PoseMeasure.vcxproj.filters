@@ -43,10 +43,24 @@
     <ClCompile Include="capturethread.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="memorypool.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="savethread.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="capturethread.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <QtMoc Include="savethread.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="memorypool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

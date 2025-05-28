@@ -101,6 +101,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="memorypool.cpp" />
+    <ClCompile Include="savethread.cpp" />
     <QtRcc Include="mainwindow.qrc" />
     <QtUic Include="mainwindow.ui" />
     <QtMoc Include="mainwindow.h" />
@@ -110,6 +112,10 @@
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="capturethread.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="memorypool.h" />
+    <QtMoc Include="savethread.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">
