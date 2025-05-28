@@ -16,13 +16,13 @@ public:
     void pause();
     void stop();
 
-    void captureROI();
+    void captureROI(int cameraIndex = 0);
 
     bool quit;
 
 
 signals:
-    void captured(QImage img);
+    void captured(QImage img, int cameraIndex);
 private:
     bool pause_status;
 

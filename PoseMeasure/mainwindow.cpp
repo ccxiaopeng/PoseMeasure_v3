@@ -12,31 +12,33 @@
 #endif
 
 //SDK
-int                     g_hCamera = -1;             //Éè±¸¾ä±ú
-BYTE*                   g_pRawBuffer = NULL;        //rawÊı¾İ
-BYTE*                   g_pMono8Buffer = NULL;        //´¦ÀíºóÊı¾İ»º´æÇø
-BYTE*                   g_pROIBuffer = NULL;       //ROIÍ¼ÏñÊı¾İ»º´æÇø
-tSdkFrameHead           g_tFrameHead;               //Í¼ÏñÖ¡Í·ĞÅÏ¢
-tSdkCameraCapbility     g_tCapability;              //Éè±¸ÃèÊöĞÅÏ¢
+int                     g_hCamera[2] = {-1, -1};           //è®¾å¤‡å¥æŸ„ï¼Œæ”¯æŒä¸¤ä¸ªç›¸æœº
+BYTE*                   g_pRawBuffer[2] = {NULL, NULL};    //rawæ•°æ®
+BYTE*                   g_pMono8Buffer[2] = {NULL, NULL};  //å•è‰²æ•°æ®ç¼“å†²åŒº
+BYTE*                   g_pROIBuffer[2] = {NULL, NULL};    //ROIå›¾åƒæ•°æ®ç¼“å†²åŒº
+tSdkFrameHead           g_tFrameHead[2];                   //å›¾åƒå¸§å¤´ä¿¡æ¯
+tSdkCameraCapbility     g_tCapability[2];                  //è®¾å¤‡æè¿°ä¿¡æ¯
 
-int                     g_SaveParameter_num = 0;    //±£´æ²ÎÊı×é
-int                     g_SaveImage_type = 0;       //±£´æÍ¼Ïñ¸ñÊ½
+int                     g_SaveParameter_num = 0;          //ä¿å­˜å‚æ•°æ•°
+int                     g_SaveImage_type = 0;             //ä¿å­˜å›¾åƒæ ¼å¼
 
-Width_Height            g_W_H_INFO;             //ÏÔÊ¾»­°åµ½´óĞ¡ºÍÍ¼Ïñ´óĞ¡
-BYTE*                   g_readBuf = NULL;       //»­°åÏÔÊ¾Êı¾İÇø
-int                     g_read_fps = 0;         //Í³¼Æ¶ÁÈ¡Ö¡ÂÊ
-int                     g_disply_fps = 0;       //Í³¼ÆÏÔÊ¾Ö¡ÂÊ
-int                     g_disply_fps_target = 4;       //Éè¶¨ÏÔÊ¾Ö¡ÂÊ
-INT64                   g_timestamp_disply_front = 0;    //Ç°Ò»ÏÔÊ¾Ö¡Ê±¼ä´Á£¬µ¥Î»0.1ms    
-INT64                   g_timestamp = 0;          //µ±Ç°Ö¡Ê±¼ä´Á£¬µ¥Î»0.1ms
+Width_Height            g_W_H_INFO[2];                    //æ˜¾ç¤ºçª—å£åˆ°å®é™…å›¾åƒå¤§å°
+BYTE*                   g_readBuf[2] = {NULL, NULL};      //ç”¨äºæ˜¾ç¤ºçš„buffer
+int                     g_read_fps[2] = {0, 0};           //ç»Ÿè®¡è¯»å–å¸§ç‡
+int                     g_disply_fps[2] = {0, 0};         //ç»Ÿè®¡æ˜¾ç¤ºå¸§ç‡
+int                     g_disply_fps_target = 4;          //è®¾å®šæ˜¾ç¤ºå¸§ç‡
+INT64                   g_timestamp_disply_front[2] = {0, 0}; //å‰ä¸€æ˜¾ç¤ºå¸§æ—¶é—´æˆ³ï¼Œå•ä½0.1ms    
+INT64                   g_timestamp[2] = {0, 0};          //å½“å‰å¸§æ—¶é—´æˆ³ï¼Œå•ä½0.1ms
+int                     g_cameraCount = 0;                //å®é™…æ£€æµ‹åˆ°çš„ç›¸æœºæ•°é‡
 
 QString                 g_captureROI_path = "";
-bool                    g_captureROI_flag = false; //ÊÇ·ñ²É¼¯²¢±£´æROIÍ¼Ïñ
+bool                    g_captureROI_flag = false;        //æ˜¯å¦é‡‡é›†å¹¶ä¿å­˜ROIå›¾åƒ
 
         
 MainWindow::MainWindow(QWidget* parent) :
     QMainWindow(parent),
-    ui(new Ui::MainWindowClass), m_scene(nullptr), m_image_item(nullptr)
+    ui(new Ui::MainWindowClass), m_scene(nullptr), m_scene2(nullptr), 
+    m_image_item(nullptr), m_image_item2(nullptr), m_currentCamera(0)
 {
 
     if (init_SDK() == -1) {
@@ -44,28 +46,43 @@ MainWindow::MainWindow(QWidget* parent) :
         return;
     }
 
-    m_disply_fps = 4;   //Ä¬ÈÏÏÔÊ¾Ö¡ÂÊ4fps
-
     ui->setupUi(this);
     m_scene = new QGraphicsScene(this);
+    m_scene2 = new QGraphicsScene(this);
     ui->gvMain->setScene(m_scene);
+    ui->gvMain_2->setScene(m_scene2);
+    
+    // åˆå§‹åŒ–ç›¸æœºé€‰æ‹©ä¸‹æ‹‰æ¡†
+    ui->comboBox_camera_select->clear();
+    for (int i = 0; i < g_cameraCount; i++) {
+        ui->comboBox_camera_select->addItem(QString("Camera %1").arg(i + 1));
+    }
+    if (g_cameraCount > 0) {
+        ui->comboBox_camera_select->setCurrentIndex(0);
+        m_currentCamera = 0;
+    }
 
-    //ÉèÖÃ¶¨Ê±Æ÷£¬Ã¿ÃëË¢ĞÂÒ»´ÎÏà»ú×´Ì¬À¸
+    //è®¾ç½®å®šæ—¶å™¨ï¼Œæ¯ç§’åˆ·æ–°ä¸€æ¬¡ç›¸æœºçŠ¶æ€æ 
     m_timer = new QTimer(this);
     connect(m_timer, SIGNAL(timeout()), this, SLOT(camera_statues()));
     m_timer->start(1000);
 
-    //Ïà»úÍ¼Ïñ»ñÈ¡Ïß³Ì
+    //å»ºç«‹å›¾åƒè·å–çº¿ç¨‹
     m_thread = new CaptureThread(this);
-    connect(m_thread, SIGNAL(captured(QImage)),
-        this, SLOT(Image_process(QImage)), Qt::BlockingQueuedConnection);
+    connect(m_thread, SIGNAL(captured(QImage, int)),
+        this, SLOT(Image_process(QImage, int)), Qt::BlockingQueuedConnection);
 
-    //Ïà»ú×´Ì¬À¸ÏÔÊ¾Ö¡ÂÊUI
+    //æ·»åŠ çŠ¶æ€æ ï¼Œæ˜¾ç¤ºå¸§ç‡UI
     m_camera_statuesFps = new QLabel(this);
     m_camera_statuesFps->setAlignment(Qt::AlignHCenter);
     ui->statusBar->addWidget(m_camera_statuesFps);
 
-    GUI_init_parameter(g_hCamera, &g_tCapability);
+    if (g_cameraCount > 0) {
+        GUI_init_parameter(g_hCamera[0], &g_tCapability[0]);
+    }
+    if (g_cameraCount > 1) {
+        GUI_init_parameter(g_hCamera[1], &g_tCapability[1]);
+	}
 
     m_thread->start();
     m_thread->stream();
@@ -90,13 +107,10 @@ void MainWindow::changeEvent(QEvent* e)
 }
 
 
-/*------ ¹Ø±Õ³ÌĞò´¦Àí ------*/
+/*------ å…³é—­ç¨‹åºå¤„ç† ------*/
 
 void MainWindow::closeEvent(QCloseEvent* e)
 {
-
-    //linux ĞèÒª´ò¿ª
-        //CameraSetTriggerMode(g_hCamera, 0);
 
     m_thread->stop();
     while (!m_thread->wait(100))
@@ -104,66 +118,100 @@ void MainWindow::closeEvent(QCloseEvent* e)
         QCoreApplication::processEvents();
     }
 
-    if (g_readBuf != NULL) {
-        free(g_readBuf);
-        g_readBuf = NULL;
-    }
+    // é‡Šæ”¾æ‰€æœ‰ç›¸æœºçš„èµ„æº
+    for (int i = 0; i < 2; i++) {
+        if (g_readBuf[i] != NULL) {
+            free(g_readBuf[i]);
+            g_readBuf[i] = NULL;
+        }
 
-    if (g_pMono8Buffer != NULL) {
-        free(g_pMono8Buffer);
-        g_pMono8Buffer = NULL;
-    }
+        if (g_pMono8Buffer[i] != NULL) {
+            free(g_pMono8Buffer[i]);
+            g_pMono8Buffer[i] = NULL;
+        }
 
-    if (g_hCamera > 0) {
-        //Ïà»ú·´³õÊ¼»¯¡£ÊÍ·Å×ÊÔ´¡£
-        CameraUnInit(g_hCamera);
-        g_hCamera = -1;
+        if (g_hCamera[i] > 0) {
+            //ååˆå§‹åŒ–ï¼Œé‡Šæ”¾èµ„æºã€‚
+            CameraUnInit(g_hCamera[i]);
+            g_hCamera[i] = -1;
+        }
     }
 
     QMainWindow::closeEvent(e);
 }
 
 
-/*------ Ïà»ú×´Ì¬À¸ ------*/
+/*------ ç›¸æœºçŠ¶æ€æ  ------*/
 
 void MainWindow::camera_statues()
 {
-    m_camera_statuesFps->setText(QString("Capture fps: %1  Display fps :%2").
-        arg(QString::number(g_read_fps, 'f', 2)).arg(QString::number(g_disply_fps, 'f', 2)));
-    g_read_fps = 0;
-    g_disply_fps = 0;
+    // æ˜¾ç¤ºä¸¤ä¸ªç›¸æœºçš„å¸§ç‡ä¿¡æ¯
+    QString statusText = QString("Camera1 - Capture:%1 Display:%2 | Camera2 - Capture:%3 Display:%4")
+        .arg(QString::number(g_read_fps[0], 'f', 2))
+        .arg(QString::number(g_disply_fps[0], 'f', 2))
+        .arg(QString::number(g_read_fps[1], 'f', 2))
+        .arg(QString::number(g_disply_fps[1], 'f', 2));
+    
+    m_camera_statuesFps->setText(statusText);
+    
+    // é‡ç½®å¸§ç‡è®¡æ•°
+    g_read_fps[0] = 0;
+    g_read_fps[1] = 0;
+    g_disply_fps[0] = 0;
+    g_disply_fps[1] = 0;
 }
 
 
-/*------ Í¼ÏñÏÔÊ¾Ë¢ĞÂ´¦Àí ------*/
+/*------ å›¾åƒæ˜¾ç¤ºåˆ·æ–°å¤„ç† ------*/
 
-void MainWindow::Image_process(QImage img)
+void MainWindow::Image_process(QImage img, int cameraIndex)
 {
     if (m_thread->quit)
     {
         return;
     }
 
-    if (m_image_item)
-    {
-        m_scene->removeItem(m_image_item);
-        delete m_image_item;
-        m_image_item = 0;
+    if (cameraIndex == 0) {
+        // å¤„ç†ç¬¬ä¸€ä¸ªç›¸æœºçš„å›¾åƒæ˜¾ç¤ºåœ¨ gvMain
+        if (m_image_item)
+        {
+            m_scene->removeItem(m_image_item);
+            delete m_image_item;
+            m_image_item = 0;
+        }
+
+        // è·å–gvMainçš„æ˜¾ç¤ºåŒºåŸŸå¤§å°
+        QSize viewSize = ui->gvMain->viewport()->size();
+        // æŒ‰æ¯”ä¾‹ç¼©æ”¾å›¾åƒï¼Œä¿æŒå®½é«˜æ¯”ï¼Œæé«˜æ˜¾ç¤ºé€Ÿåº¦
+        QImage scaledImg = img.scaled(viewSize, Qt::KeepAspectRatio, Qt::FastTransformation);
+
+        m_image_item = m_scene->addPixmap(QPixmap::fromImage(scaledImg));
+        m_scene->setSceneRect(0, 0, scaledImg.width(), scaledImg.height());
+
+        g_disply_fps[0]++;
+    } else if (cameraIndex == 1) {
+        // å¤„ç†ç¬¬äºŒä¸ªç›¸æœºçš„å›¾åƒæ˜¾ç¤ºåœ¨ gvMain_2
+        if (m_image_item2)
+        {
+            m_scene2->removeItem(m_image_item2);
+            delete m_image_item2;
+            m_image_item2 = 0;
+        }
+
+        // è·å–gvMain_2çš„æ˜¾ç¤ºåŒºåŸŸå¤§å°
+        QSize viewSize = ui->gvMain_2->viewport()->size();
+        // æŒ‰æ¯”ä¾‹ç¼©æ”¾å›¾åƒï¼Œä¿æŒå®½é«˜æ¯”ï¼Œæé«˜æ˜¾ç¤ºé€Ÿåº¦
+        QImage scaledImg = img.scaled(viewSize, Qt::KeepAspectRatio, Qt::FastTransformation);
+
+        m_image_item2 = m_scene2->addPixmap(QPixmap::fromImage(scaledImg));
+        m_scene2->setSceneRect(0, 0, scaledImg.width(), scaledImg.height());
+
+        g_disply_fps[1]++;
     }
-
-    // »ñÈ¡gvMainµÄÏÔÊ¾ÇøÓò´óĞ¡
-    QSize viewSize = ui->gvMain->viewport()->size();
-    // °´±ÈÀıËõ·ÅÍ¼ÏñÒÔÊÊÓ¦´°¿Ú£¬±£³Ö×İºá±È
-    QImage scaledImg = img.scaled(viewSize, Qt::KeepAspectRatio, Qt::FastTransformation);
-
-    m_image_item = m_scene->addPixmap(QPixmap::fromImage(scaledImg));
-    m_scene->setSceneRect(0, 0, scaledImg.width(), scaledImg.height());
-
-    g_disply_fps++;
 }
 
 
-/*------ SDKµÈ³õÊ¼»¯²Ù×÷------*/
+/*------ SDKç­‰åˆå§‹åŒ–æ“ä½œ ------*/
 
 int MainWindow::init_SDK()
 {
@@ -172,60 +220,102 @@ int MainWindow::init_SDK()
     int                     iStatus = -1;
     tSdkCameraDevInfo       tCameraEnumList[4];
 
-    //sdk³õÊ¼»¯  0 English 1ÖĞÎÄ
+    //sdkåˆå§‹åŒ–  0 English 1ä¸­æ–‡
     CameraSdkInit(1);
 
-    //Ã¶¾ÙÉè±¸£¬²¢½¨Á¢Éè±¸ÁĞ±í
+    //æšä¸¾è®¾å¤‡ï¼Œå¹¶å»ºç«‹è®¾å¤‡åˆ—è¡¨
     CameraEnumerateDevice(tCameraEnumList, &iCameraCounts);
 
-    //Ã»ÓĞÁ¬½ÓÉè±¸
+    //æ²¡æœ‰è¿æ¥è®¾å¤‡
     if (iCameraCounts == 0) {
+		qDebug() << "No camera connected!";
         return -1;
     }
 
-    //Ïà»ú³õÊ¼»¯¡£³õÊ¼»¯³É¹¦ºó£¬²ÅÄÜµ÷ÓÃÈÎºÎÆäËûÏà»úÏà¹ØµÄ²Ù×÷½Ó¿Ú
-    iStatus = CameraInit(&tCameraEnumList[0], -1, -1, &g_hCamera);
+    g_cameraCount = (iCameraCounts > 2) ? 2 : iCameraCounts;
 
-    //³õÊ¼»¯Ê§°Ü
-    if (iStatus != CAMERA_STATUS_SUCCESS) {
-        return -1;
+    if (g_cameraCount==1)
+    {
+        //ç›¸æœºåˆå§‹åŒ–ã€‚åˆå§‹åŒ–æˆåŠŸåï¼Œæ‰èƒ½è°ƒç”¨ä»»ä½•å…¶ä»–ç›¸æœºç›¸å…³çš„æ“ä½œæ¥å£
+        iStatus = CameraInit(&tCameraEnumList[0], -1, -1, &g_hCamera[0]);
+        if (iStatus != CAMERA_STATUS_SUCCESS) return -1;
     }
-    //»ñµÃÏà»úµÄÌØĞÔÃèÊö½á¹¹Ìå¡£¸Ã½á¹¹ÌåÖĞ°üº¬ÁËÏà»ú¿ÉÉèÖÃµÄ¸÷ÖÖ²ÎÊıµÄ·¶Î§ĞÅÏ¢¡£¾ö¶¨ÁËÏà¹Øº¯ÊıµÄ²ÎÊı
-    CameraGetCapability(g_hCamera, &g_tCapability);
-
-    g_pMono8Buffer = (unsigned char*)malloc(g_tCapability.sResolutionRange.iHeightMax * g_tCapability.sResolutionRange.iWidthMax);
-    g_readBuf = (unsigned char*)malloc(g_tCapability.sResolutionRange.iHeightMax * g_tCapability.sResolutionRange.iWidthMax);
-
-    //ÈÃSDK½øÈë¹¤×÷Ä£Ê½£¬¿ªÊ¼½ÓÊÕÀ´×ÔÏà»ú·¢ËÍµÄÍ¼ÏñÊı¾İ¡£
-    //Èç¹ûµ±Ç°Ïà»úÊÇ´¥·¢Ä£Ê½£¬ÔòĞèÒª½ÓÊÕµ½´¥·¢Ö¡ÒÔºó²Å»á¸üĞÂÍ¼Ïñ¡£
-    CameraPlay(g_hCamera);
-
-
-    //ÉèÖÃÍ¼Ïñ´¦ÀíµÄÊä³ö¸ñÊ½£¬²ÊÉ«ºÚ°×¶¼Ö§³ÖRGB24Î»
-    if (g_tCapability.sIspCapacity.bMonoSensor) {
-        CameraSetIspOutFormat(g_hCamera, CAMERA_MEDIA_TYPE_MONO8);
+    else if (g_cameraCount == 2)
+    {
+		//è·å–è®¾å¤‡åtCameraEnumList[0].acFriendlyName,æ ¹æ®è®¾å¤‡åç¡®å®šç›¸æœºçš„ç´¢å¼•,CameraXçš„ç´¢å¼•ä¸º0,CameraYçš„ç´¢å¼•ä¸º1
+        if (strcmp(tCameraEnumList[0].acFriendlyName, "CameraX") == 0)
+        {
+            iStatus = CameraInit(&tCameraEnumList[0], -1, -1, &g_hCamera[0]);
+            if (iStatus != CAMERA_STATUS_SUCCESS) return -1;
+			iStatus = CameraInit(&tCameraEnumList[1], -1, -1, &g_hCamera[1]);
+            if (iStatus != CAMERA_STATUS_SUCCESS) return -1;
+        }
+        else if (strcmp(tCameraEnumList[0].acFriendlyName, "CameraY") == 0)
+        {
+            iStatus = CameraInit(&tCameraEnumList[1], -1, -1, &g_hCamera[0]);
+			if (iStatus != CAMERA_STATUS_SUCCESS) return -1;
+            iStatus = CameraInit(&tCameraEnumList[0], -1, -1, &g_hCamera[1]);
+            if (iStatus != CAMERA_STATUS_SUCCESS) return -1;
+        }
+        else
+        {
+			qDebug() << "Unknown camera name: " << tCameraEnumList[0].acFriendlyName;
+            return -1;
+        }
     }
-    else {
-        CameraSetIspOutFormat(g_hCamera, CAMERA_MEDIA_TYPE_RGB8);
+    else return -1;
+
+    for (int i = 0; i < g_cameraCount; i++) {
+
+        //è·å¾—ç›¸æœºçš„ç‰¹æ€§æè¿°ç»“æ„ä½“ã€‚è¯¥ç»“æ„ä½“ä¸­åŒ…å«äº†ç›¸æœºå¯è®¾ç½®çš„å„ç§å‚æ•°çš„èŒƒå›´ä¿¡æ¯ã€‚å†³å®šäº†ç›¸å…³å‡½æ•°çš„å‚æ•°
+        CameraGetCapability(g_hCamera[i], &g_tCapability[i]);
+
+        g_pMono8Buffer[i] = (unsigned char*)malloc(g_tCapability[i].sResolutionRange.iHeightMax * g_tCapability[i].sResolutionRange.iWidthMax);
+        g_readBuf[i] = (unsigned char*)malloc(g_tCapability[i].sResolutionRange.iHeightMax * g_tCapability[i].sResolutionRange.iWidthMax);
+
+        //è®©SDKè¿›å…¥å·¥ä½œæ¨¡å¼ï¼Œå¼€å§‹æ¥æ”¶æ¥è‡ªç›¸æœºå‘é€çš„å›¾åƒæ•°æ®ã€‚
+        //å¦‚æœå½“å‰ç›¸æœºæ˜¯è§¦å‘æ¨¡å¼ï¼Œåˆ™éœ€è¦æ¥æ”¶åˆ°è§¦å‘å¸§ä»¥åæ‰ä¼šæ›´æ–°å›¾åƒã€‚    
+        CameraPlay(g_hCamera[i]);
+
+        //è®¾ç½®å›¾åƒå¤„ç†çš„è¾“å‡ºæ ¼å¼ï¼Œå½©è‰²é»‘ç™½å‡æ”¯æŒRGB24ä½
+        if (g_tCapability[i].sIspCapacity.bMonoSensor) {
+            CameraSetIspOutFormat(g_hCamera[i], CAMERA_MEDIA_TYPE_MONO8);
+        }
+        else {
+            CameraSetIspOutFormat(g_hCamera[i], CAMERA_MEDIA_TYPE_RGB8);
+        }
     }
+    
     return 0;
 }
 
-/*------ QT½çÃæ³õÊ¼»¯ ------*/
+
+
+/*------ QTç•Œé¢åˆå§‹åŒ– ------*/
 
 int  MainWindow::GUI_init_parameter(int hCamera, tSdkCameraCapbility* pCameraInfo)
 {
-    tSdkImageResolution* pImageSizeDesc = pCameraInfo->pImageSizeDesc;// Ô¤Éè·Ö±æÂÊÑ¡Ôñ
-    tSdkImageResolution     sResolution;  //»ñÈ¡µ±Ç°ÉèÖÃµ½·Ö±æÂÊ
+    tSdkImageResolution*    pImageSizeDesc = pCameraInfo->pImageSizeDesc;// é¢„è®¾åˆ†è¾¨ç‡é€‰æ‹©
+    tSdkImageResolution     sResolution;  //è·å–å½“å‰è®¾ç½®çš„åˆ†è¾¨ç‡
 
-    //»ñµÃµ±Ç°Ô¤ÀÀµÄ·Ö±æÂÊ¡£
+    //è·å¾—å½“å‰é¢„è®¾çš„åˆ†è¾¨ç‡ã€‚
     CameraGetImageResolution(hCamera, &sResolution);
 
-    g_W_H_INFO.sensor_width = pImageSizeDesc[sResolution.iIndex].iWidth;
-    g_W_H_INFO.sensor_height = pImageSizeDesc[sResolution.iIndex].iHeight;
-    g_W_H_INFO.buffer_size = g_W_H_INFO.sensor_width * g_W_H_INFO.sensor_height;
-
+    // æ‰¾åˆ°å¯¹åº”çš„ç›¸æœºç´¢å¼•
+    int cameraIndex = -1;
+    for (int i = 0; i < g_cameraCount; i++) {
+        if (g_hCamera[i] == hCamera) {
+            cameraIndex = i;
+            break;
+        }
+    }
     
+    if (cameraIndex >= 0) {
+        g_W_H_INFO[cameraIndex].sensor_width = pImageSizeDesc[sResolution.iIndex].iWidth;
+        g_W_H_INFO[cameraIndex].sensor_height = pImageSizeDesc[sResolution.iIndex].iHeight;
+        g_W_H_INFO[cameraIndex].buffer_size = g_W_H_INFO[cameraIndex].sensor_width * g_W_H_INFO[cameraIndex].sensor_height;
+    }
+
     GUI_init_exposure(hCamera, pCameraInfo);
     GUI_init_Trigger(hCamera, pCameraInfo);
 
@@ -243,10 +333,10 @@ int  MainWindow::GUI_init_Trigger(int hCamera, tSdkCameraCapbility* pCameraInfo)
     int StrobeMode = 0;
     int  uPolarity = 0;
 
-    //»ñµÃÏà»úµÄ´¥·¢Ä£Ê½¡£
+    //è·å¾—ç›¸æœºçš„è§¦å‘æ¨¡å¼
     CameraGetTriggerMode(hCamera, &pbySnapMode);
 
-    //ÉèÖÃÏà»úµÄ´¥·¢Ä£Ê½¡£0±íÊ¾Á¬Ğø²É¼¯Ä£Ê½£»1±íÊ¾Èí¼ş´¥·¢Ä£Ê½£»2±íÊ¾Ó²¼ş´¥·¢Ä£Ê½¡£
+    //è®¾ç½®ç›¸æœºçš„è§¦å‘æ¨¡å¼ã€‚0è¡¨ç¤ºè¿ç»­é‡‡é›†æ¨¡å¼ï¼›1è¡¨ç¤ºè½¯ä»¶è§¦å‘æ¨¡å¼ï¼›2è¡¨ç¤ºç¡¬ä»¶è§¦å‘æ¨¡å¼ã€‚
     switch (pbySnapMode) {
     case 0:
         ui->radioButton_collect->setChecked(true);
@@ -271,47 +361,47 @@ int  MainWindow::GUI_init_Trigger(int hCamera, tSdkCameraCapbility* pCameraInfo)
 int  MainWindow::GUI_init_exposure(int hCamera, tSdkCameraCapbility* pCameraInfo)
 {
 
-    BOOL            AEstate = FALSE;    //Ä¬ÈÏÊÖ¶¯ÆØ¹â
+    BOOL            AEstate = FALSE;    //é»˜è®¤æ‰‹åŠ¨æ›å…‰
     int             pbyAeTarget;
     double          pfExposureTime;
     int             pusAnalogGain;
     BOOL            FlickEnable = FALSE;
     int             piFrequencySel;
-    double	        m_fExpLineTime = 0;//µ±Ç°µÄĞĞÆØ¹âÊ±¼ä£¬µ¥Î»Îªus
+    double	        m_fExpLineTime = 0;//å½“å‰çš„è¡Œæ›å…‰æ—¶é—´ï¼Œå•ä½ä¸ºus
     tSdkExpose* SdkExpose = &pCameraInfo->sExposeDesc;
 
-    //ÉèÖÃÏà»úÄ¬ÈÏÊÖ¶¯ÆØ¹âÄ£Ê½¡£
+    //è®¾ç½®ç›¸æœºé»˜è®¤æ‰‹åŠ¨æ›å…‰æ¨¡å¼ã€‚
     CameraSetAeState(hCamera, false);
 
-    // ÉèÖÃ³õÊ¼Ïà»úÄ¬ÈÏÆØ¹âÊ±¼äÎª10¦Ìs
+    // è®¾ç½®åˆå§‹ç›¸æœºé»˜è®¤æ›å…‰æ—¶é—´ä¸º10Î¼s
     CameraSetExposureTime(hCamera, 10);
 
-    // ÉèÖÃ³õÊ¼Ïà»úÄ¬ÈÏÄ£ÄâÔöÒæÎª×îĞ¡Öµ
+    // è®¾ç½®åˆå§‹ç›¸æœºé»˜è®¤æ¨¡æ‹Ÿå¢ç›Šä¸ºæœ€å°å€¼
     CameraSetAnalogGain(hCamera, 6);
     
-    //»ñµÃÏà»úµ±Ç°µÄÆØ¹âÄ£Ê½¡£
+    //è·å¾—ç›¸æœºå½“å‰çš„æ›å…‰æ¨¡å¼ã€‚
     //CameraGetAeState(hCamera, &AEstate);
 
-    //»ñµÃ×Ô¶¯ÆØ¹âµÄÁÁ¶ÈÄ¿±êÖµ¡£
+    //è·å¾—è‡ªåŠ¨æ›å…‰çš„äº®åº¦ç›®æ ‡å€¼ã€‚
     CameraGetAeTarget(hCamera, &pbyAeTarget);
 
-    //»ñµÃ×Ô¶¯ÆØ¹âÊ±¿¹ÆµÉÁ¹¦ÄÜµÄÊ¹ÄÜ×´Ì¬¡£
+    //è·å¾—è‡ªåŠ¨æ›å…‰æ—¶æŠ—é¢‘é—ªåŠŸèƒ½çš„ä½¿èƒ½çŠ¶æ€ã€‚
     CameraGetAntiFlick(hCamera, &FlickEnable);
 
-    //»ñµÃÏà»úµÄÆØ¹âÊ±¼ä¡£
+    //è·å¾—ç›¸æœºçš„æ›å…‰æ—¶é—´ã€‚
     CameraGetExposureTime(hCamera, &pfExposureTime);
 
-    //»ñµÃÍ¼ÏñĞÅºÅµÄÄ£ÄâÔöÒæÖµ¡£
+    //è·å¾—å›¾åƒä¿¡å·çš„æ¨¡æ‹Ÿå¢ç›Šå€¼ã€‚
     CameraGetAnalogGain(hCamera, &pusAnalogGain);
 
-    //»ñµÃ×Ô¶¯ÆØ¹âÊ±£¬ÏûÆµÉÁµÄÆµÂÊÑ¡Ôñ¡£
+    //è·å¾—è‡ªåŠ¨æ›å…‰æ—¶ï¼Œæ¶ˆé¢‘é—ªçš„é¢‘ç‡é€‰æ‹©ã€‚
     CameraGetLightFrequency(hCamera, &piFrequencySel);
 
     /*
-        »ñµÃÒ»ĞĞµÄÆØ¹âÊ±¼ä¡£¶ÔÓÚCMOS´«¸ĞÆ÷£¬ÆäÆØ¹â
-        µÄµ¥Î»ÊÇ°´ÕÕĞĞÀ´¼ÆËãµÄ£¬Òò´Ë£¬ÆØ¹âÊ±¼ä²¢²»ÄÜÔÚÎ¢Ãë
-        ¼¶±ğÁ¬Ğø¿Éµ÷¡£¶øÊÇ»á°´ÕÕÕûĞĞÀ´È¡Éá¡£Õâ¸öº¯ÊıµÄ
-        ×÷ÓÃ¾ÍÊÇ·µ»ØCMOSÏà»úÆØ¹âÒ»ĞĞ¶ÔÓ¦µÄÊ±¼ä¡£
+        è·å¾—ä¸€è¡Œçš„æ›å…‰æ—¶é—´ã€‚å¯¹äºCMOSä¼ æ„Ÿå™¨ï¼Œå…¶æ›å…‰
+        çš„å•ä½æ˜¯æŒ‰ç…§è¡Œæ¥è®¡ç®—çš„ï¼Œå› æ­¤ï¼Œæ›å…‰æ—¶é—´å¹¶ä¸èƒ½åœ¨å¾®ç§’
+        çº§åˆ«è¿ç»­å¯è°ƒã€‚è€Œæ˜¯ä¼šæŒ‰ç…§æ•´è¡Œæ¥å–èˆã€‚è¿™ä¸ªå‡½æ•°çš„
+        ä½œç”¨å°±æ˜¯è¿”å›CMOSç›¸æœºæ›å…‰ä¸€è¡Œå¯¹åº”çš„æ—¶é—´ã€‚
     */
     CameraGetExposureLineTime(hCamera, &m_fExpLineTime);
 
@@ -327,81 +417,134 @@ int  MainWindow::GUI_init_exposure(int hCamera, tSdkCameraCapbility* pCameraInfo
 
 }
 
-/*------ QT½çÃæ°´Å¥µÈ²Ù×÷ ------*/
+/*------ QTç•Œé¢æŒ‰é’®ç­‰æ“ä½œ ------*/
 
-//Ïà»úÑ¡ÔñÏÂÀ­¿ò²Ù×÷
+//ç›¸æœºé€‰æ‹©ä¸‹æ‹‰æ¡†æ“ä½œ
 void MainWindow::on_comboBox_camera_select_activated(int index)
 {
-
+    if (index >= 0 && index < g_cameraCount) {
+        m_currentCamera = index;
+        updateCurrentCameraSettings();
+    }
 }
 
-//ÔöÒæÖµÉèÖÃ
+// æ›´æ–°å½“å‰é€‰ä¸­ç›¸æœºçš„è®¾ç½®åˆ°UI
+void MainWindow::updateCurrentCameraSettings()
+{
+    if (m_currentCamera >= 0 && m_currentCamera < g_cameraCount) {
+        int hCamera = g_hCamera[m_currentCamera];
+        
+        // è·å–å½“å‰ç›¸æœºçš„å¢ç›Šå€¼
+        int pusAnalogGain;
+        CameraGetAnalogGain(hCamera, &pusAnalogGain);
+        ui->spinBox_gain->setValue(pusAnalogGain);
+        
+        // è·å–å½“å‰ç›¸æœºçš„æ›å…‰æ—¶é—´
+        double pfExposureTime;
+        CameraGetExposureTime(hCamera, &pfExposureTime);
+        ui->doubleSpinBox_exposure_time->setValue(pfExposureTime);
+        
+        // è·å–å½“å‰ç›¸æœºçš„è§¦å‘æ¨¡å¼
+        int pbySnapMode;
+        CameraGetTriggerMode(hCamera, &pbySnapMode);
+        
+        switch (pbySnapMode) {
+        case 0:
+            ui->radioButton_collect->setChecked(true);
+            ui->software_trigger_once_button->setEnabled(false);
+            break;
+        case 1:
+            ui->radioButton_software_trigger->setChecked(true);
+            ui->software_trigger_once_button->setEnabled(true);
+            break;
+        default:
+            ui->radioButton_collect->setChecked(true);
+            ui->software_trigger_once_button->setEnabled(false);
+            break;
+        }
+    }
+}
+
+//å¢ç›Šå€¼è®¾ç½®
 void MainWindow::on_spinBox_gain_valueChanged(int value)
 {
-    int             pusAnalogGain = 0;
+    if (m_currentCamera >= 0 && m_currentCamera < g_cameraCount) {
+        int pusAnalogGain = 0;
+        int hCamera = g_hCamera[m_currentCamera];
 
-    CameraSetAnalogGain(g_hCamera, value);
-    CameraGetAnalogGain(g_hCamera, &pusAnalogGain);
-    ui->spinBox_gain->setValue(pusAnalogGain);
+        CameraSetAnalogGain(hCamera, value);
+        CameraGetAnalogGain(hCamera, &pusAnalogGain);
+        ui->spinBox_gain->setValue(pusAnalogGain);
+    }
 }
 
-//ÆØ¹âÊ±¼äÉèÖÃ
+//æ›å…‰æ—¶é—´è®¾ç½®
 void MainWindow::on_doubleSpinBox_exposure_time_valueChanged(double value)
 {
-    double          m_fExpTime = 0;     //µ±Ç°µÄÆØ¹âÊ±¼ä£¬µ¥Î»Îªus
+    if (m_currentCamera >= 0 && m_currentCamera < g_cameraCount) {
+        double m_fExpTime = 0;     //å½“å‰çš„æ›å…‰æ—¶é—´ï¼Œå•ä½ä¸ºus
+        int hCamera = g_hCamera[m_currentCamera];
 
-    /*
-    ÉèÖÃÆØ¹âÊ±¼ä¡£µ¥Î»ÎªÎ¢Ãë¡£¶ÔÓÚCMOS´«¸ĞÆ÷£¬ÆäÆØ¹â
-    µÄµ¥Î»ÊÇ°´ÕÕĞĞÀ´¼ÆËãµÄ£¬Òò´Ë£¬ÆØ¹âÊ±¼ä²¢²»ÄÜÔÚÎ¢Ãë
-    ¼¶±ğÁ¬Ğø¿Éµ÷¡£¶øÊÇ»á°´ÕÕÕûĞĞÀ´È¡Éá¡£ÔÚµ÷ÓÃ
-    ±¾º¯ÊıÉè¶¨ÆØ¹âÊ±¼äºó£¬½¨ÒéÔÙµ÷ÓÃCameraGetExposureTime
-    À´»ñµÃÊµ¼ÊÉè¶¨µÄÖµ¡£
-    */
-    CameraSetExposureTime(g_hCamera, value);
-    CameraGetExposureTime(g_hCamera, &m_fExpTime);
-    ui->doubleSpinBox_exposure_time->setValue(m_fExpTime);
+        /*
+        è®¾ç½®æ›å…‰æ—¶é—´ã€‚å•ä½ä¸ºå¾®ç§’ã€‚å¯¹äºCMOSä¼ æ„Ÿå™¨ï¼Œå…¶æ›å…‰
+        çš„å•ä½æ˜¯æŒ‰ç…§è¡Œæ¥ç®—çš„ï¼Œå› æ­¤ï¼Œæ›å…‰æ—¶é—´å¹¶ä¸èƒ½åœ¨å¾®ç§’
+        çº§åˆ«è¿ç»­å¯è°ƒã€‚è€Œæ˜¯ä¼šæŒ‰ç…§æ•´è¡Œæ¥å–èˆã€‚åœ¨è°ƒç”¨
+        å‡½æ•°è®¾å®šæ›å…‰æ—¶é—´åï¼Œå»ºè®®å†è°ƒç”¨CameraGetExposureTime
+        æ¥è·å¾—å®é™…è®¾å®šçš„å€¼ã€‚
+        */
+        CameraSetExposureTime(hCamera, value);
+        CameraGetExposureTime(hCamera, &m_fExpTime);
+        ui->doubleSpinBox_exposure_time->setValue(m_fExpTime);
+    }
 }
 
-//Á¬Ğø²É¼¯Ä£Ê½
+//è¿ç»­é‡‡é›†æ¨¡å¼
 void MainWindow::on_radioButton_collect_clicked(bool checked)
 {
     ui->radioButton_collect->setChecked(true);
     if (checked)
     {
-        //»ñµÃÏà»úµÄ´¥·¢Ä£Ê½¡£
-        CameraSetTriggerMode(g_hCamera, 0);
+        // è®¾ç½®æ‰€æœ‰ç›¸æœºçš„è§¦å‘æ¨¡å¼
+        for (int i = 0; i < g_cameraCount; i++) {
+            CameraSetTriggerMode(g_hCamera[i], 0);
+        }
 
         ui->radioButton_collect->setChecked(true);
         ui->software_trigger_once_button->setEnabled(false);
     }
 }
 
-//Èí´¥·¢Ä£Ê½
+//è½¯è§¦å‘æ¨¡å¼
 void MainWindow::on_radioButton_software_trigger_clicked(bool checked)
 {
     ui->radioButton_software_trigger->setChecked(true);
     if (checked)
     {
-        //»ñµÃÏà»úµÄ´¥·¢Ä£Ê½¡£
-        CameraSetTriggerMode(g_hCamera, 1);
+        // è®¾ç½®æ‰€æœ‰ç›¸æœºçš„è§¦å‘æ¨¡å¼
+        for (int i = 0; i < g_cameraCount; i++) {
+            CameraSetTriggerMode(g_hCamera[i], 1);
+        }
 
-        //ÉèÖÃÏà»úµÄ´¥·¢Ä£Ê½¡£0±íÊ¾Á¬Ğø²É¼¯Ä£Ê½£»1±íÊ¾Èí¼ş´¥·¢Ä£Ê½£»2±íÊ¾Ó²¼ş´¥·¢Ä£Ê½¡£
+        //è·å¾—ç›¸æœºçš„è§¦å‘æ¨¡å¼ã€‚0è¡¨ç¤ºè¿ç»­é‡‡é›†æ¨¡å¼ï¼›1è¡¨ç¤ºè½¯ä»¶è§¦å‘æ¨¡å¼ï¼›2è¡¨ç¤ºç¡¬ä»¶è§¦å‘æ¨¡å¼ã€‚
         ui->radioButton_software_trigger->setChecked(true);
         ui->software_trigger_once_button->setEnabled(true);
     }
 }
 
-//Èí´¥·¢Ò»´Î²Ù×÷
+//è½¯è§¦å‘ä¸€æ¬¡æ“ä½œ
 void MainWindow::on_software_trigger_once_button_clicked()
 {
-    //Ö´ĞĞÒ»´ÎÈí´¥·¢¡£Ö´ĞĞºó£¬»á´¥·¢ÓÉCameraSetTriggerCountÖ¸¶¨µÄÖ¡Êı¡£
-    CameraSoftTrigger(g_hCamera);
+    // åŒæ—¶è§¦å‘æ‰€æœ‰ç›¸æœº
+    for (int i = 0; i < g_cameraCount; i++) {
+        //æ‰§è¡Œä¸€æ¬¡è½¯è§¦å‘ã€‚æ‰§è¡Œåï¼Œä¼šè§¦å‘ç”±CameraSetTriggerCountæŒ‡å®šçš„å¸§æ•°ã€‚
+        CameraSoftTrigger(g_hCamera[i]);
+    }
 }
 
-//±£´æÍ¼Æ¬Â·¾¶ÉèÖÃ
+//ä¿å­˜å›¾ç‰‡è·¯å¾„è®¾ç½®
 void MainWindow::on_pushButton_snap_path_released()
 {
-    QFileDialog* openFilePath = new QFileDialog(this, "Select Folder", "");     //´ò¿ªÒ»¸öÄ¿Â¼Ñ¡Ôñ¶Ô»°¿ò
+    QFileDialog* openFilePath = new QFileDialog(this, "Select Folder", "");     //ï¿½ï¿½Ò»ï¿½ï¿½Ä¿Â¼Ñ¡ï¿½ï¿½Ô»ï¿½ï¿½ï¿½
     openFilePath->setFileMode(QFileDialog::Directory);
     if (openFilePath->exec() == QDialog::Accepted)
     {
@@ -413,46 +556,49 @@ void MainWindow::on_pushButton_snap_path_released()
 
 }
 
-//±£´æÍ¼Æ¬°´Å¥È·ÈÏ
+//ä¿å­˜å›¾ç‰‡æŒ‰é’®ç¡®è®¤
 void MainWindow::on_pushButton_snap_catch_released()
 {
-    tSdkFrameHead	tFrameHead;
-    BYTE* pbyBuffer;
-    BYTE* pbImgBuffer;
-    char                filename[512] = { 0 };
     QString path = ui->snap_path_lineEdit->text();
-
     char* dir;
     QByteArray tmp = path.toLatin1();
     dir = tmp.data();
 
-    sprintf_s(filename, sizeof(filename), "%s/test", dir);
+    // åŒæ—¶æŠ“æ‹æ‰€æœ‰ç›¸æœºçš„å›¾åƒ
+    for (int i = 0; i < g_cameraCount; i++) {
+        tSdkFrameHead tFrameHead;
+        BYTE* pbyBuffer;
+        BYTE* pbImgBuffer;
+        char filename[512] = { 0 };
 
-    //CameraSnapToBuffer×¥ÅÄÒ»ÕÅÍ¼Ïñ±£´æµ½bufferÖĞ
-    // !!!!!!×¢Òâ£ºCameraSnapToBuffer »áÇĞ»»·Ö±æÂÊÅÄÕÕ£¬ËÙ¶È½ÏÂı¡£×öÊµÊ±´¦Àí£¬ÇëÓÃCameraGetImageBufferº¯ÊıÈ¡Í¼»òÕß»Øµ÷º¯Êı¡£
-    if (CameraSnapToBuffer(g_hCamera, &tFrameHead, &pbyBuffer, 1000) == CAMERA_STATUS_SUCCESS)
-    {
-        pbImgBuffer = (unsigned char*)malloc(g_tCapability.sResolutionRange.iHeightMax * g_tCapability.sResolutionRange.iWidthMax);
+        sprintf_s(filename, sizeof(filename), "%s/camera%d_test", dir, i + 1);
 
-        /*
-        ½«»ñµÃµÄÏà»úÔ­Ê¼Êä³öÍ¼ÏñÊı¾İ½øĞĞ´¦Àí£¬µş¼Ó±¥ºÍ¶È¡¢
-        ÑÕÉ«ÔöÒæºÍĞ£Õı¡¢½µÔëµÈ´¦ÀíĞ§¹û£¬×îºóµÃµ½RGB888
-        ¸ñÊ½µÄÍ¼ÏñÊı¾İ¡£
-        */
-        CameraImageProcess(g_hCamera, pbyBuffer, pbImgBuffer, &tFrameHead);
+        //CameraSnapToBufferæŠ“å–ä¸€å¸§å›¾åƒä¿å­˜åˆ°bufferä¸­
+        // !!!!!!æ³¨æ„ï¼šCameraSnapToBuffer å¯èƒ½ä¼šç›´æ¥é˜»å¡ä½ï¼Œé€Ÿåº¦è¾ƒæ…¢ï¼Œå®æ—¶ä»»åŠ¡è¯·ç”¨CameraGetImageBufferæ¥è·å–å›¾åƒæˆ–å›è°ƒæ–¹å¼
+        if (CameraSnapToBuffer(g_hCamera[i], &tFrameHead, &pbyBuffer, 1000) == CAMERA_STATUS_SUCCESS)
+        {
+            pbImgBuffer = (unsigned char*)malloc(g_tCapability[i].sResolutionRange.iHeightMax * g_tCapability[i].sResolutionRange.iWidthMax);
 
-        //½«Í¼Ïñ»º³åÇøµÄÊı¾İ±£´æ³ÉÍ¼Æ¬ÎÄ¼ş¡£
-        CameraSaveImage(g_hCamera, filename, pbImgBuffer, &tFrameHead, FILE_BMP_8BIT, 100);
-        //ÊÍ·ÅÓÉCameraGetImageBuffer»ñµÃµÄ»º³åÇø¡£
-        CameraReleaseImageBuffer(g_hCamera, pbImgBuffer);
-        free(pbImgBuffer);
+            /*
+            å°†è·å¾—çš„åŸå§‹è¾“å‡ºå›¾åƒæ•°æ®è¿›è¡Œå¤„ç†ï¼Œå åŠ é¥±å’Œåº¦ã€
+            é¢œè‰²å¢ç›Šå’Œæ ¡æ­£ã€é™å™ªç­‰ç­‰åŠŸèƒ½ï¼Œæœ€åå¾—åˆ°RGB888
+            æ ¼å¼çš„å›¾åƒæ•°æ®ã€‚
+            */
+            CameraImageProcess(g_hCamera[i], pbyBuffer, pbImgBuffer, &tFrameHead);
+
+            //å°†å›¾åƒç¼“å†²åŒºçš„æ•°æ®ä¿å­˜æˆå›¾ç‰‡æ–‡ä»¶ã€‚
+            CameraSaveImage(g_hCamera[i], filename, pbImgBuffer, &tFrameHead, FILE_BMP_8BIT, 100);
+            //é‡Šæ”¾ç”±CameraGetImageBufferè·å¾—çš„ç¼“å†²åŒºã€‚
+            CameraReleaseImageBuffer(g_hCamera[i], pbImgBuffer);
+            free(pbImgBuffer);
+        }
     }
 }
 
-//²É¼¯ROIÍ¼ÏñÂ·¾¶ÉèÖÃ
+//é‡‡é›†ROIå›¾åƒè·¯å¾„è®¾ç½®
 void MainWindow::on_pushButton_captureROI_path_released()
 {
-    QFileDialog* openFilePath = new QFileDialog(this, "Select Folder", "");     //´ò¿ªÒ»¸öÄ¿Â¼Ñ¡Ôñ¶Ô»°¿ò
+    QFileDialog* openFilePath = new QFileDialog(this, "Select Folder", "");     //ï¿½ï¿½Ò»ï¿½ï¿½Ä¿Â¼Ñ¡ï¿½ï¿½Ô»ï¿½ï¿½ï¿½
     openFilePath->setFileMode(QFileDialog::Directory);
     if (openFilePath->exec() == QDialog::Accepted)
     {
@@ -463,12 +609,12 @@ void MainWindow::on_pushButton_captureROI_path_released()
     delete openFilePath;
 }
 
-//²É¼¯ROIÍ¼ÏñÊıÁ¿ÉèÖÃ
+//é‡‡é›†ROIå›¾åƒæ•°é‡è®¾ç½®
 void MainWindow::on_spinBox_captureROI_num_valueChanged(int value)
 {
 }
 
-//²É¼¯ROIÍ¼Ïñ¿ªÊ¼°´Å¥
+//é‡‡é›†ROIå›¾åƒå¼€å§‹æŒ‰é’®
 void MainWindow::on_pushButton_captureROI_start_released()
 {
     if (g_captureROI_path.isEmpty()) {
@@ -478,7 +624,7 @@ void MainWindow::on_pushButton_captureROI_start_released()
     g_captureROI_flag = true;
 }
 
-//²É¼¯ROIÍ¼ÏñÍ£Ö¹°´Å¥
+//é‡‡é›†ROIå›¾åƒåœæ­¢æŒ‰é’®
 void MainWindow::on_pushButton_captureROI_stop_released()
 {
     g_captureROI_flag = false;

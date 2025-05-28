@@ -39,6 +39,7 @@ private:
     int  GUI_init_parameter(int hCamera, tSdkCameraCapbility* pCameraInfo);
     int  GUI_init_exposure(int hCamera, tSdkCameraCapbility* pCameraInfo);
     int  GUI_init_Trigger(int hCamera, tSdkCameraCapbility* pCameraInfo);
+    void updateCurrentCameraSettings();
 
 private slots:
     void on_comboBox_camera_select_activated(int index);
@@ -56,9 +57,8 @@ private slots:
     void on_pushButton_captureROI_path_released();
     void on_spinBox_captureROI_num_valueChanged(int value);
     void on_pushButton_captureROI_start_released();
-    void on_pushButton_captureROI_stop_released();
-
-    void Image_process(QImage img);
+    void on_pushButton_captureROI_stop_released();    
+    void Image_process(QImage img, int cameraIndex);
     void camera_statues();
 
 private:
@@ -67,12 +67,14 @@ private:
     QLabel* m_camera_statuesFps;
 
     QGraphicsScene* m_scene;
+    QGraphicsScene* m_scene2; // 第二个相机的场景
     QGraphicsPixmapItem* m_image_item;
+    QGraphicsPixmapItem* m_image_item2; // 第二个相机的图像项
     QRadioButton* radioButton_speed[3];
 
     CaptureThread* m_thread;
 
-    double m_disply_fps;
+    int m_currentCamera; // 当前选中的相机索引 (0或1)
 };
 
 #endif // MAINWINDOW_H

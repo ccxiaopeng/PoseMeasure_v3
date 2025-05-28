@@ -5,26 +5,27 @@
 #include <windows.h>
 #include "CameraApi.h"
 
-//SDKÊ¹ÓÃ
-extern int                  g_hCamera;          //Éè±¸¾ä±ú
-extern BYTE*                g_pRawBuffer;       //rawÊı¾İ
-extern BYTE*                g_pMono8Buffer;     //´¦ÀíºóÊı¾İ»º´æÇø
-extern BYTE*                g_pROIBuffer;       //ROIÍ¼ÏñÊı¾İ»º´æÇø
-extern tSdkFrameHead        g_tFrameHead;       //Í¼ÏñÖ¡Í·ĞÅÏ¢
-extern tSdkCameraCapbility  g_tCapability;      //Éè±¸ÃèÊöĞÅÏ¢
+//SDKä½¿ç”¨
+extern int                  g_hCamera[2];        //è®¾å¤‡å¥æŸ„
+extern BYTE*                g_pRawBuffer[2];     //rawæ•°æ®
+extern BYTE*                g_pMono8Buffer[2];   //å•è‰²æ•°æ®ç¼“å†²åŒº
+extern BYTE*                g_pROIBuffer[2];     //ROIå›¾åƒæ•°æ®ç¼“å†²åŒº
+extern tSdkFrameHead        g_tFrameHead[2];     //å›¾åƒå¸§å¤´ä¿¡æ¯
+extern tSdkCameraCapbility  g_tCapability[2];    //è®¾å¤‡æè¿°ä¿¡æ¯
 
 
-extern Width_Height         g_W_H_INFO;         //ÏÔÊ¾»­°åµ½´óĞ¡ºÍÍ¼Ïñ´óĞ¡
-extern BYTE*                g_readBuf;          //ÏÔÊ¾Êı¾İbuffer
-extern int                  g_read_fps;         //Í³¼ÆÖ¡ÂÊ
-extern int                  g_disply_fps;       //Í³¼ÆÏÔÊ¾Ö¡ÂÊ
-extern int                  g_disply_fps_target;       //Éè¶¨ÏÔÊ¾Ö¡ÂÊ
-extern int                  g_SaveImage_type;   //±£´æÍ¼Ïñ¸ñÊ½
-extern INT64                g_timestamp_disply_front;    //Ç°Ò»ÏÔÊ¾Ö¡Ê±¼ä´Á    
-extern INT64                g_timestamp;          //µ±Ç°Ö¡Ê±¼ä´Á
+extern Width_Height         g_W_H_INFO[2];       //æ˜¾ç¤ºçª—å£åˆ°å®é™…å›¾åƒå¤§å°
+extern BYTE*                g_readBuf[2];        //æ˜¾ç¤ºæ•°æ®buffer
+extern int                  g_read_fps[2];       //ç»Ÿè®¡å¸§ç‡
+extern int                  g_disply_fps[2];     //ç»Ÿè®¡æ˜¾ç¤ºå¸§ç‡
+extern int                  g_disply_fps_target; //è®¾å®šæ˜¾ç¤ºå¸§ç‡
+extern int                  g_SaveImage_type;    //ä¿å­˜å›¾åƒæ ¼å¼
+extern INT64                g_timestamp_disply_front[2]; //å‰ä¸€æ˜¾ç¤ºå¸§æ—¶é—´æˆ³    
+extern INT64                g_timestamp[2];      //å½“å‰å¸§æ—¶é—´æˆ³
+extern int                  g_cameraCount;       //å®é™…æ£€æµ‹åˆ°çš„ç›¸æœºæ•°é‡
 
 extern QString              g_captureROI_path;
-extern bool                 g_captureROI_flag; //ÊÇ·ñ²É¼¯²¢±£´æROIÍ¼Ïñ
+extern bool                 g_captureROI_flag; //æ˜¯å¦é‡‡é›†å¹¶ä¿å­˜ROIå›¾åƒ
 
 CaptureThread::CaptureThread(QObject* parent) :
     QThread(parent)
@@ -45,37 +46,35 @@ void CaptureThread::run()
         if (!pause_status)
         {
             if (quit) break;
-            if (CameraGetImageBuffer(g_hCamera,&g_tFrameHead,&g_pRawBuffer,2000) == CAMERA_STATUS_SUCCESS)
-            {
-                //»ñÈ¡µ±Ç°Ö¡µÄÊ±¼ä´Á£¬µ¥Î»0.1ºÁÃë
-                g_timestamp = g_tFrameHead.uiTimeStamp;
-
-                CameraImageProcess(g_hCamera,g_pRawBuffer,g_pMono8Buffer,&g_tFrameHead);
-                CameraReleaseImageBuffer(g_hCamera,g_pRawBuffer);
-                
-                if ((g_timestamp - g_timestamp_disply_front) / 10000.0 > 1.0 / g_disply_fps_target)
+            
+            // å¤„ç†æ‰€æœ‰ç›¸æœºçš„å›¾åƒé‡‡é›†
+            for (int i = 0; i < g_cameraCount; i++) {
+                if (CameraGetImageBuffer(g_hCamera[i], &g_tFrameHead[i], &g_pRawBuffer[i], 100) == CAMERA_STATUS_SUCCESS)
                 {
-                    memcpy(g_readBuf, g_pMono8Buffer, g_W_H_INFO.buffer_size);
+                    //è·å–å½“å‰å¸§çš„æ—¶é—´æˆ³ï¼Œå•ä½0.1æ¯«ç§’
+                    g_timestamp[i] = g_tFrameHead[i].uiTimeStamp;
 
-                    if (quit) break;
-                    QImage img(g_readBuf, g_W_H_INFO.sensor_width, g_W_H_INFO.sensor_height, QImage::Format_Indexed8);
-                    img.setColorTable(grayColourTable);
-                    emit captured(img);     //·¢ËÍĞÅºÅ£¬Í¨ÖªÖ÷Ïß³Ì¸üĞÂÏÔÊ¾
-                    g_timestamp_disply_front = g_timestamp; // ¸üĞÂÏÔÊ¾Ê±¼ä´Á
+                    CameraImageProcess(g_hCamera[i], g_pRawBuffer[i], g_pMono8Buffer[i], &g_tFrameHead[i]);
+                    CameraReleaseImageBuffer(g_hCamera[i], g_pRawBuffer[i]);
+                    
+                    if ((g_timestamp[i] - g_timestamp_disply_front[i]) / 10000.0 > 1.0 / g_disply_fps_target)
+                    {
+                        memcpy(g_readBuf[i], g_pMono8Buffer[i], g_W_H_INFO[i].buffer_size);
+
+                        if (quit) break;
+                        QImage img(g_readBuf[i], g_W_H_INFO[i].sensor_width, g_W_H_INFO[i].sensor_height, QImage::Format_Indexed8);
+                        img.setColorTable(grayColourTable);
+                        emit captured(img, i);     //å‘å°„ä¿¡å·ï¼Œé€šçŸ¥ä¸»çº¿ç¨‹æ›´æ–°æ˜¾ç¤º
+                        g_timestamp_disply_front[i] = g_timestamp[i]; // æ›´æ–°æ˜¾ç¤ºæ—¶é—´æˆ³
+                    }
+
+                    if (g_captureROI_flag) //å¦‚æœéœ€è¦é‡‡é›†ROIå›¾åƒ
+                    {
+                        captureROI(i);
+                    }
+
+                    g_read_fps[i]++; //ç»Ÿè®¡æŠ“å–å¸§ç‡
                 }
-
-                if (g_captureROI_flag) //Èç¹ûĞèÒª²É¼¯ROIÍ¼Ïñ
-                {
-                    captureROI();
-                }
-
-                g_read_fps++; //Í³¼Æ×¥È¡Ö¡ÂÊ
-
-            }
-            else   
-            {
-               printf("timeout \n");
-               usleep(1000);
             }
         }
         else usleep(1000);
@@ -101,19 +100,21 @@ void CaptureThread::stop()
 }
 
 
-void CaptureThread::captureROI()
+void CaptureThread::captureROI(int cameraIndex)
 {
-    // ¸´ÖÆµ±Ç°´¦Àíºó»Ò¶ÈÍ¼ÏñÊı¾İµ½ÁÙÊ±»º³åÇø
-    BYTE* pbImgBuffer = (BYTE*)malloc(g_W_H_INFO.buffer_size);
-    if (pbImgBuffer == nullptr || g_pMono8Buffer == nullptr) return;
-    memcpy(pbImgBuffer, g_pMono8Buffer, g_W_H_INFO.buffer_size);
+    if (cameraIndex < 0 || cameraIndex >= g_cameraCount) return;
     
-    int width = g_W_H_INFO.sensor_width;
-    int height = g_W_H_INFO.sensor_height;
-    int ROI_w = 512; // ROI¿í¶È
-    int ROI_h = 512; // ROI¸ß¶È
-    int ROI_x = (width - ROI_w) / 2; // ROI×óÉÏ½Çx×ø±ê
-    int ROI_y = (height - ROI_h) / 2; // ROI×óÉÏ½Çy×ø±ê
+    // å¤åˆ¶å½“å‰ç›¸æœºç°åº¦å›¾åƒæ•°æ®åˆ°ä¸´æ—¶ç¼“å†²åŒº
+    BYTE* pbImgBuffer = (BYTE*)malloc(g_W_H_INFO[cameraIndex].buffer_size);
+    if (pbImgBuffer == nullptr || g_pMono8Buffer[cameraIndex] == nullptr) return;
+    memcpy(pbImgBuffer, g_pMono8Buffer[cameraIndex], g_W_H_INFO[cameraIndex].buffer_size);
+    
+    int width = g_W_H_INFO[cameraIndex].sensor_width;
+    int height = g_W_H_INFO[cameraIndex].sensor_height;
+    int ROI_w = 512; // ROIå®½åº¦
+    int ROI_h = 512; // ROIé«˜åº¦
+    int ROI_x = (width - ROI_w) / 2; // ROIå·¦ä¸Šè§’xåæ ‡
+    int ROI_y = (height - ROI_h) / 2; // ROIå·¦ä¸Šè§’yåæ ‡
 
     std::vector<BYTE> ROI;
     ROI.resize(ROI_w * ROI_h);
@@ -121,103 +122,17 @@ void CaptureThread::captureROI()
         memcpy(&ROI[r * ROI_w], &pbImgBuffer[(ROI_y + r) * width + ROI_x], ROI_w);
     }
 
-    //´´½¨ÎÄ¼şÂ·¾¶ºÍÎÄ¼şÃû
-    char                filename[512] = { 0 };
+    //æ„é€ æ–‡ä»¶è·¯å¾„å’Œæ–‡ä»¶å
+    char filename[512] = { 0 };
     char* dir;
     QByteArray tmp = g_captureROI_path.toLatin1();
     dir = tmp.data();
-    sprintf_s(filename, sizeof(filename), "%s/X%I64d", dir, g_timestamp);
+    sprintf_s(filename, sizeof(filename), "%s/Camera%d_X%I64d", dir, cameraIndex + 1, g_timestamp[cameraIndex]);
 
-    //±£´æROIÍ¼Ïñ
+    //ä¿å­˜ROIå›¾åƒ
     QImage imgROI(&ROI[0], ROI_w, ROI_h, QImage::Format_Indexed8);
     imgROI.setColorTable(grayColourTable);
     imgROI.save(QString::fromLatin1(filename) + ".bmp", "BMP");
 
     free(pbImgBuffer);
 }
-
-//#include <vector>
-//#include <algorithm>
-//#include <cmath>
-
-//void CaptureThread::captureROI()
-//{
-//    // ¸´ÖÆµ±Ç°´¦Àíºó»Ò¶ÈÍ¼ÏñÊı¾İµ½ÁÙÊ±»º³åÇø
-//    int width = g_W_H_INFO.sensor_width;
-//    int height = g_W_H_INFO.sensor_height;
-//    BYTE* pbImgBuffer = (BYTE*)malloc(g_W_H_INFO.buffer_size);
-//    memcpy(pbImgBuffer, g_pMono8Buffer, g_W_H_INFO.buffer_size);
-//
-//    // 1. ¼ÆËãÃ¿Ò»ÁĞ£¨´Ó 0 µ½ width-1£©µÄÏñËØÖµºÍ
-//    std::vector<double> colSums(width, 0.0);
-//    for (int col = 0; col < width; col++) {
-//        double sum = 0.0;
-//        for (int row = 0; row < height; row++) {
-//            sum += pbImgBuffer[row * width + col];
-//        }
-//        colSums[col] = sum;
-//    }
-//    // 2. ÕÒµ½ËùÓĞÁĞºÍĞ¡ÓÚ (×îĞ¡ÁĞºÍ + 30000) µÄÁĞË÷Òı£¬²¢¼ÆËãÆ½¾ùÖµ
-//    double sumXMin = *std::min_element(colSums.begin(), colSums.end());
-//    std::vector<int> candidateCols;
-//    for (int i = 0; i < width; i++) {
-//        if (colSums[i] < sumXMin + 30000)
-//            candidateCols.push_back(i);
-//    }
-//    double candidateMean = 0.0;
-//    if (!candidateCols.empty()) {
-//        int sumCandidates = 0;
-//        for (int col : candidateCols) {
-//            sumCandidates += col;
-//        }
-//        candidateMean = static_cast<double>(sumCandidates) / candidateCols.size();
-//    }
-//    int x = static_cast<int>(std::round(candidateMean));
-//
-//    // 3. ¼ÆËã ROI µÄ x ×ø±ê£º½«Æ½¾ùÎ»ÖÃ¼õÈ¥ 580£¬²¢ÏŞÖÆ²»Ğ¡ÓÚ 0
-//    int ROI_x = std::max(x - 580, 0);
-//
-//    // 4. ÕÒ³öµÚ x ÁĞÖĞ£¬µÚÒ»¸öÏñËØÖµ´óÓÚ 250 µÄĞĞË÷Òı
-//    int firstRow = -1;
-//    for (int row = 0; row < height; row++) {
-//        if (pbImgBuffer[row * width + x] > 250) {
-//            firstRow = row;
-//            break;
-//        }
-//    }
-//    // ROI_y È¡µÚÒ»¸öÂú×ãÌõ¼şµÄĞĞË÷Òı¼õÈ¥ 1040£¬×îµÍÎª 0
-//    int ROI_y = (firstRow != -1) ? std::max(firstRow - 1040, 0) : 0;
-//
-//    // 5. ¸ù¾İÉè¶¨£¬ROI µÄ¿í¶ÈºÍ¸ß¶È·Ö±ğÎª£º
-//    //    ROI_w = min(1160, width - ROI_x)
-//    //    ROI_h = min(1060, height - ROI_y)
-//    int ROI_w = std::min(1160, width - ROI_x);
-//    int ROI_h = std::min(1060, height - ROI_y);
-//
-//    // 6. ÌáÈ¡ ROI Í¼Ïñ£¨¸´ÖÆ ROI ÇøÓòÊı¾İµ½Ò»¸ö vector ÖĞ£©
-//    std::vector<BYTE> ROI;
-//    ROI.resize(ROI_w * ROI_h);
-//    for (int r = 0; r < ROI_h; r++) {
-//        memcpy(&ROI[r * ROI_w], &pbImgBuffer[(ROI_y + r) * width + ROI_x], ROI_w);
-//    }
-//
-//    // 7. ¼ÆËã ROI ÇøÓòÄÚÂú×ãÏñËØÖµÔÚ (50, 255) Ö®¼äµÄÏñËØÎ»ÖÃºÍÖµ
-//    std::vector<int> xs, ys;
-//    std::vector<double> vs;
-//    for (int r = 0; r < ROI_h; r++) {
-//        for (int c = 0; c < ROI_w; c++) {
-//            BYTE pixel = ROI[r * ROI_w + c];
-//            if (pixel > 50 && pixel < 255) {
-//                xs.push_back(c);
-//                ys.push_back(r);
-//                vs.push_back(static_cast<double>(pixel));
-//            }
-//        }
-//    }
-//
-//    // Êä³öµ÷ÊÔĞÅÏ¢
-//    qDebug() << "ROI extracted at (" << ROI_x << "," << ROI_y << "), size: (" << ROI_w << "x" << ROI_h << ")";
-//    qDebug() << "Valid pixels count:" << xs.size();
-//
-//    free(pbImgBuffer);
-//}
