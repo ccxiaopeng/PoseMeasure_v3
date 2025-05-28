@@ -215,6 +215,17 @@ int MainWindow::init_SDK()
 
 int  MainWindow::GUI_init_parameter(int hCamera, tSdkCameraCapbility* pCameraInfo)
 {
+    tSdkImageResolution* pImageSizeDesc = pCameraInfo->pImageSizeDesc;// 预设分辨率选择
+    tSdkImageResolution     sResolution;  //获取当前设置到分辨率
+
+    //获得当前预览的分辨率。
+    CameraGetImageResolution(hCamera, &sResolution);
+
+    g_W_H_INFO.sensor_width = pImageSizeDesc[sResolution.iIndex].iWidth;
+    g_W_H_INFO.sensor_height = pImageSizeDesc[sResolution.iIndex].iHeight;
+    g_W_H_INFO.buffer_size = g_W_H_INFO.sensor_width * g_W_H_INFO.sensor_height;
+
+    
     GUI_init_exposure(hCamera, pCameraInfo);
     GUI_init_Trigger(hCamera, pCameraInfo);
 
